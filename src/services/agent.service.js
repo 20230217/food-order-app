@@ -1,13 +1,40 @@
 // d:\Uniapp\food-order-app\server\src\services\agent.service.js
 
-const invokeFoodAgent = require('../agent/foodAgent');
 const CartService = require('./cartService');
 const DishModel = require('../models/dishModel');
-const { AIMessage, HumanMessage } = require('@langchain/core/messages');
-const { ChatOllama } = require('@langchain/community/chat_models/ollama');
+
 const pendingActions = new Map();
 const recipeContexts = new Map();
 const normalizeMessage = (message) => String(message || '').trim();
+
+const callDeepSeek = async (messages, options = {}) => {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('Missing DEEPSEEK_API_KEY');
+  }
+
+  const response = await fetch(process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      messages,
+      temperature: options.temperature ?? 0.2,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `DeepSeek API request failed: ${response.status}`);
+  }
+
+  return String(data?.choices?.[0]?.message?.content || '').trim();
+};
 
 const toNumber = (value, defaultValue = 1) => {
   const numberValue = Number(value);
@@ -16,18 +43,20 @@ const toNumber = (value, defaultValue = 1) => {
 
 const buildToolCall = (name, args = {}) => ({ name, args });
 
-const recipeLlm = new ChatOllama({
-  baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
-  model: process.env.OLLAMA_MODEL || 'qwen2.5:3b',
-  temperature: 0.2,
-});
-
 const invokeRecipeFallback = async (prompt) => {
   try {
-    const result = await recipeLlm.invoke(prompt);
-    return typeof result.content === 'string' ? result.content : String(result.content || '').trim();
+    return await callDeepSeek([
+      {
+        role: 'system',
+        content: '你是一个中文家庭菜谱助手，回答要清晰、实用、适合家庭制作。',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ]);
   } catch (error) {
-    console.error('Error invoking recipe fallback:', error);
+    console.error('Error invoking DeepSeek recipe fallback:', error);
     return '抱歉，AI 参考做法生成失败，请稍后再试。';
   }
 };
@@ -52,12 +81,20 @@ const invokeRecommendationInspiration = async (message, keyword, dishes = []) =>
   5. 语言简洁，适合家庭点餐或做菜参考。`;
 
   try {
-    const result = await recipeLlm.invoke(prompt);
-    return typeof result.content === 'string' ? result.content : String(result.content || '').trim();
+    return await callDeepSeek([
+      {
+        role: 'system',
+        content: '你是一个中文家庭菜品灵感助手，推荐要具体、简洁、不要编造菜品ID。',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ], { temperature: 0.5 });
   } catch (error) {
-    console.error('Error invoking recommendation inspiration:', error);
-    return 'AI 灵感推荐暂时生成失败，请稍后再试。';
-  }
+    console.error('Error invoking DeepSeek recommendation inspiration:', error);
+  return 'AI 灵感推荐暂时生成失败，请稍后再试。';
+}
 };
 
 const summarizeCart = (cartItems) => {
@@ -511,27 +548,33 @@ ${formatCartReply(cartItems)}`,
           ],
         };
       }
-
       const safeChatHistory = Array.isArray(chatHistory) ? chatHistory : [];
-      const formattedChatHistory = safeChatHistory.map((msg) => {
-        if (msg.type === 'human') {
-          return new HumanMessage(msg.content);
-        }
+      const messages = [
+        {
+          role: 'system',
+          content: '你是智能点餐助手。请用中文简洁回答。涉及购物车操作时，不要直接执行，只提示用户说出明确菜品ID。',
+        },
+        ...safeChatHistory
+          .filter((msg) => msg && msg.content)
+          .map((msg) => ({
+            role: msg.type === 'ai' ? 'assistant' : 'user',
+            content: String(msg.content),
+          })),
+        {
+          role: 'user',
+          content: normalizedMessage,
+        },
+      ];
 
-        if (msg.type === 'ai') {
-          return new AIMessage(msg.content);
-        }
-
-        return msg;
-      });
-
-      const { reply, toolCalls } = await invokeFoodAgent(
-        normalizedUserId,
-        normalizedMessage,
-        formattedChatHistory
-      );
-
-      return { reply, toolCalls };
+      const reply = await callDeepSeek(messages);
+      return {
+        reply,
+        toolCalls: [
+          buildToolCall('deepseek_chat', {
+            userId: normalizedUserId,
+          }),
+        ],
+      };
     } catch (error) {
       console.error('Error in AgentService.chatWithAgent:', error);
       throw new Error('Failed to chat with agent');
