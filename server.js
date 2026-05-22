@@ -16,8 +16,8 @@ const server = http.createServer(app);
 registerChatSocketServer(server);
 
 // 启动服务器
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on 0.0.0.0:${PORT}`);
 
   // 尝试连接数据库，验证数据库配置是否正确
   pool.getConnection()
