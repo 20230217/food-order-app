@@ -15,7 +15,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const initSqlJs = require('sql.js');
+
+const sqlJsModule = require('sql.js');
+const initSqlJs = sqlJsModule.default || sqlJsModule;
 
 const databaseFile = process.env.SQLITE_DB_PATH || path.join(process.cwd(), 'food-order.sqlite');
 
@@ -37,7 +39,9 @@ const persistDatabase = (db) => {
 
 const getDatabase = async () => {
   if (!dbPromise) {
-    dbPromise = initSqlJs().then((SQL) => {
+    dbPromise = initSqlJs({
+      locateFile: (file) => path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', file),
+    }).then((SQL) => {
       if (fs.existsSync(databaseFile)) {
         return new SQL.Database(fs.readFileSync(databaseFile));
       }
