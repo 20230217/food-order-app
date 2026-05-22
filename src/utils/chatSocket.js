@@ -1,4 +1,4 @@
-const WS_URL = 'ws://127.0.0.1:3000/ws/chat';
+const WS_URL = 'https://food-order-app-production-db46.up.railway.app/ws/chat';
 
 let socketTask = null;
 let connectedUserId = null;
