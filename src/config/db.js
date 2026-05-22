@@ -13,23 +13,46 @@
 // module.exports = pool;
 
 
+const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
+const initSqlJs = require('sql.js');
 
 const databaseFile = process.env.SQLITE_DB_PATH || path.join(process.cwd(), 'food-order.sqlite');
 
-const dbPromise = open({
-  filename: databaseFile,
-  driver: sqlite3.Database,
-});
-
+let dbPromise = null;
 let schemaInitPromise = null;
 
-const initializeSchema = async () => {
-  const db = await dbPromise;
+const ensureDatabaseDir = () => {
+  const dir = path.dirname(databaseFile);
 
-  await db.exec(`
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+};
+
+const persistDatabase = (db) => {
+  ensureDatabaseDir();
+  fs.writeFileSync(databaseFile, Buffer.from(db.export()));
+};
+
+const getDatabase = async () => {
+  if (!dbPromise) {
+    dbPromise = initSqlJs().then((SQL) => {
+      if (fs.existsSync(databaseFile)) {
+        return new SQL.Database(fs.readFileSync(databaseFile));
+      }
+
+      return new SQL.Database();
+    });
+  }
+
+  return dbPromise;
+};
+
+const initializeSchema = async () => {
+  const db = await getDatabase();
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS dishes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -111,6 +134,8 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS idx_chat_conversation_created ON chat_messages(conversation_key, created_at);
     CREATE INDEX IF NOT EXISTS idx_chat_receiver_read ON chat_messages(receiver_id, is_read);
   `);
+
+  persistDatabase(db);
 };
 
 const ensureSchemaInitialized = async () => {
@@ -119,11 +144,6 @@ const ensureSchemaInitialized = async () => {
   }
 
   return schemaInitPromise;
-};
-
-const normalizeParams = (params) => {
-  if (!Array.isArray(params)) return [];
-  return params;
 };
 
 const transformSql = (sql) => {
@@ -135,10 +155,8 @@ const transformSql = (sql) => {
     .replace(/TINYINT/gi, 'INTEGER')
     .replace(/JSON/gi, 'TEXT')
     .replace(/\s+ON\s+UPDATE\s+CURRENT_TIMESTAMP/gi, '')
-    .replace(/\s+AFTER\s+\w+/gi, '')
-    .replace(/\s+UNIQUE\s*$/gim, '');
+    .replace(/\s+AFTER\s+\w+/gi, '');
 
-  // SQLite 不支持在 CREATE TABLE 内直接写 MySQL 的 INDEX 行。
   if (/CREATE\s+TABLE/i.test(transformed)) {
     transformed = transformed
       .split('\n')
@@ -150,20 +168,50 @@ const transformSql = (sql) => {
   return transformed;
 };
 
+const normalizeParams = (params) => (Array.isArray(params) ? params : []);
+
 const getTableColumns = async (tableName, likeName) => {
-  const db = await dbPromise;
+  const db = await getDatabase();
   await ensureSchemaInitialized();
 
-  const columns = await db.all(`PRAGMA table_info(${tableName})`);
-  const rows = columns.map((column) => ({ Field: column.name }));
+  const result = db.exec(`PRAGMA table_info(${tableName})`);
+  const rows = result.length
+    ? result[0].values.map((row) => ({ Field: row[1] }))
+    : [];
 
   if (!likeName) return rows;
 
   return rows.filter((row) => row.Field === likeName);
 };
 
+const all = (db, sql, params) => {
+  const statement = db.prepare(sql);
+  statement.bind(params);
+
+  const rows = [];
+
+  while (statement.step()) {
+    rows.push(statement.getAsObject());
+  }
+
+  statement.free();
+
+  return rows;
+};
+
+const run = (db, sql, params) => {
+  const statement = db.prepare(sql);
+  statement.run(params);
+  statement.free();
+
+  const insertId = db.exec('SELECT last_insert_rowid() AS insertId')[0]?.values?.[0]?.[0] || 0;
+  const affectedRows = db.getRowsModified();
+
+  return { insertId, affectedRows };
+};
+
 const runQuery = async (sql, params = []) => {
-  const db = await dbPromise;
+  const db = await getDatabase();
   await ensureSchemaInitialized();
 
   const normalizedParams = normalizeParams(params);
@@ -181,7 +229,6 @@ const runQuery = async (sql, params = []) => {
 
   const transformedSql = transformSql(rawSql);
 
-  // 兼容 mysql2 的批量插入写法：VALUES ? + [[row1, row2]]。
   if (/VALUES\s+\?/i.test(transformedSql) && Array.isArray(normalizedParams[0])) {
     const rows = normalizedParams[0];
 
@@ -195,30 +242,44 @@ const runQuery = async (sql, params = []) => {
       .join(', ');
 
     const expandedSql = transformedSql.replace(/VALUES\s+\?/i, `VALUES ${placeholders}`);
-    const flatParams = rows.flat();
-    const result = await db.run(expandedSql, flatParams);
+    const result = run(db, expandedSql, rows.flat());
 
-    return [{ insertId: result.lastID, affectedRows: result.changes }];
+    persistDatabase(db);
+
+    return [result];
   }
 
   if (/^\s*SELECT\b/i.test(transformedSql) || /^\s*PRAGMA\b/i.test(transformedSql)) {
-    return [await db.all(transformedSql, normalizedParams)];
+    return [all(db, transformedSql, normalizedParams)];
   }
 
-  const result = await db.run(transformedSql, normalizedParams);
+  const result = run(db, transformedSql, normalizedParams);
 
-  return [{ insertId: result.lastID, affectedRows: result.changes }];
+  persistDatabase(db);
+
+  return [result];
 };
 
 const createConnection = async () => {
-  const db = await dbPromise;
+  const db = await getDatabase();
   await ensureSchemaInitialized();
 
   return {
     query: runQuery,
-    beginTransaction: async () => db.exec('BEGIN TRANSACTION'),
-    commit: async () => db.exec('COMMIT'),
-    rollback: async () => db.exec('ROLLBACK'),
+
+    beginTransaction: async () => {
+      db.run('BEGIN TRANSACTION');
+    },
+
+    commit: async () => {
+      db.run('COMMIT');
+      persistDatabase(db);
+    },
+
+    rollback: async () => {
+      db.run('ROLLBACK');
+    },
+
     release: () => {},
   };
 };
