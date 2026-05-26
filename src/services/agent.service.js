@@ -42,8 +42,12 @@ const toNumber = (value, defaultValue = 1) => {
 };
 
 const buildToolCall = (name, args = {}) => ({ name, args });
-
+const isDeepSeekConfigured = () => Boolean(process.env.DEEPSEEK_API_KEY);
 const invokeRecipeFallback = async (prompt) => {
+  if (!isDeepSeekConfigured()) {
+    return 'AI 参考做法暂时不可用：后端还没有配置 DEEPSEEK_API_KEY。请先在 Railway Variables 中添加 DeepSeek API Key 后重新部署。';
+  }
+
   try {
     return await callDeepSeek([
       {
@@ -80,6 +84,10 @@ const invokeRecommendationInspiration = async (message, keyword, dishes = []) =>
   4. 不要编造菜品ID，不要说可以直接加入购物车；
   5. 语言简洁，适合家庭点餐或做菜参考。`;
 
+  if (!isDeepSeekConfigured()) {
+    return 'AI 灵感推荐暂时不可用：后端还没有配置 DEEPSEEK_API_KEY。';
+  }
+
   try {
     return await callDeepSeek([
       {
@@ -93,8 +101,23 @@ const invokeRecommendationInspiration = async (message, keyword, dishes = []) =>
     ], { temperature: 0.5 });
   } catch (error) {
     console.error('Error invoking DeepSeek recommendation inspiration:', error);
-  return 'AI 灵感推荐暂时生成失败，请稍后再试。';
-}
+    return 'AI 灵感推荐暂时生成失败，请稍后再试。';
+  }
+};
+
+const buildLocalAssistantReply = async () => {
+  const dishes = await DishModel.getAllDishes();
+
+  if (!dishes || dishes.length === 0) {
+    return '后端服务已连接，但当前 SQLite 数据库里还没有菜品数据。原 MySQL 数据不会自动出现在 SQLite 中，需要先把 MySQL 数据导出并导入 SQLite，或通过新增菜品接口重新添加。';
+  }
+
+  const preview = dishes
+    .slice(0, 5)
+    .map((dish, index) => `${index + 1}. ${dish.name}（菜品ID：${dish.id}，价格 ${dish.price || 0} 元）`)
+    .join('\n');
+
+  return `我已连接后端，但当前未配置 DEEPSEEK_API_KEY，所以只能使用本地菜品规则回复。\n你可以问我“推荐菜品”“查看购物车”“把菜品ID为X的菜加入购物车”。\n\n当前部分菜品：\n${preview}`;
 };
 
 const summarizeCart = (cartItems) => {
@@ -566,7 +589,10 @@ ${formatCartReply(cartItems)}`,
         },
       ];
 
-      const reply = await callDeepSeek(messages);
+      const reply = isDeepSeekConfigured()
+        ? await callDeepSeek(messages)
+        : await buildLocalAssistantReply();
+
       return {
         reply,
         toolCalls: [

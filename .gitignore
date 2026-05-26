@@ -22,6 +22,7 @@ pids
 dist/
 build/
 .unpackage/
+unpackage/
 
 # env
 .env
@@ -49,5 +50,14 @@ coverage/
 # vite
 .vite/
 
-# typescript
-*.tsbuildinfo
+# HBuilderX / UniApp local cache
+.hbuilderx/
+.project
+.settings/
+
+# local upload/cache folders if not needed
+uploads/
+prism-uploads/
+
+# keep sqlite database tracked intentionally
+# Do NOT ignore food-order.sqlite if you want Railway to deploy initial data.

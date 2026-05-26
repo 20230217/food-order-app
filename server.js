@@ -22,11 +22,11 @@ server.listen(PORT, '0.0.0.0', () => {
   // 尝试连接数据库，验证数据库配置是否正确
   pool.getConnection()
     .then(connection => {
-      console.log('Successfully connected to MySQL database!');
+      console.log('Successfully initialized SQLite database!');
       connection.release(); // 释放连接
     })
     .catch(err => {
-      console.error('Failed to connect to MySQL database:', err.message);
+      console.error('Failed to initialize SQLite database:', err.message);
       // 如果数据库连接失败，可以选择退出应用或进行其他错误处理
       // process.exit(1);
     });

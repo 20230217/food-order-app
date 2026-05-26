@@ -156,6 +156,7 @@ const transformSql = (sql) => {
     .replace(/BIGINT\s+PRIMARY\s+KEY\s+AUTO_INCREMENT/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
     .replace(/INT\s+PRIMARY\s+KEY\s+AUTO_INCREMENT/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
     .replace(/INT\s+AUTO_INCREMENT\s+PRIMARY\s+KEY/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
+    .replace(/\bINT\b/gi, 'INTEGER')
     .replace(/TINYINT/gi, 'INTEGER')
     .replace(/JSON/gi, 'TEXT')
     .replace(/\s+ON\s+UPDATE\s+CURRENT_TIMESTAMP/gi, '')
@@ -176,7 +177,6 @@ const normalizeParams = (params) => (Array.isArray(params) ? params : []);
 
 const getTableColumns = async (tableName, likeName) => {
   const db = await getDatabase();
-  await ensureSchemaInitialized();
 
   const result = db.exec(`PRAGMA table_info(${tableName})`);
   const rows = result.length
@@ -214,10 +214,11 @@ const run = (db, sql, params) => {
   return { insertId, affectedRows };
 };
 
-const runQuery = async (sql, params = []) => {
+const runQuery = async (sql, params = [], options = {}) => {
   const db = await getDatabase();
   await ensureSchemaInitialized();
 
+  const shouldPersist = options.persist !== false;
   const normalizedParams = normalizeParams(params);
   const rawSql = String(sql).trim();
 
@@ -248,7 +249,9 @@ const runQuery = async (sql, params = []) => {
     const expandedSql = transformedSql.replace(/VALUES\s+\?/i, `VALUES ${placeholders}`);
     const result = run(db, expandedSql, rows.flat());
 
-    persistDatabase(db);
+    if (shouldPersist) {
+      persistDatabase(db);
+    }
 
     return [result];
   }
@@ -259,7 +262,9 @@ const runQuery = async (sql, params = []) => {
 
   const result = run(db, transformedSql, normalizedParams);
 
-  persistDatabase(db);
+  if (shouldPersist) {
+    persistDatabase(db);
+  }
 
   return [result];
 };
@@ -267,21 +272,34 @@ const runQuery = async (sql, params = []) => {
 const createConnection = async () => {
   const db = await getDatabase();
   await ensureSchemaInitialized();
+  let inTransaction = false;
 
   return {
-    query: runQuery,
+    query: (sql, params) => runQuery(sql, params, { persist: !inTransaction }),
 
     beginTransaction: async () => {
       db.run('BEGIN TRANSACTION');
+      inTransaction = true;
     },
 
     commit: async () => {
       db.run('COMMIT');
+      inTransaction = false;
       persistDatabase(db);
     },
 
     rollback: async () => {
-      db.run('ROLLBACK');
+      if (!inTransaction) return;
+
+      inTransaction = false;
+
+      try {
+        db.run('ROLLBACK');
+      } catch (error) {
+        if (!/no transaction is active/i.test(error.message || '')) {
+          throw error;
+        }
+      }
     },
 
     release: () => {},
