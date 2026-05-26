@@ -57,6 +57,33 @@ const initializeSchema = async () => {
   const db = await getDatabase();
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      openid TEXT UNIQUE,
+      username TEXT UNIQUE,
+      password TEXT,
+      nickname TEXT,
+      avatar_url TEXT,
+      avatar TEXT,
+      phone TEXT,
+      email TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS dishes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -69,6 +96,8 @@ const initializeSchema = async () => {
       cook_time INTEGER DEFAULT 0,
       difficulty TEXT DEFAULT '简单',
       diet_type TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       ingredients TEXT
     );
 
@@ -76,18 +105,15 @@ const initializeSchema = async () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       dish_id INTEGER NOT NULL,
       step_order INTEGER NOT NULL,
-      content TEXT NOT NULL
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS dish_tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      password TEXT,
-      openid TEXT UNIQUE,
-      nickname TEXT,
-      avatar_url TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      dish_id INTEGER NOT NULL,
+      tag_id INTEGER NOT NULL,
+      UNIQUE(dish_id, tag_id)
     );
 
     CREATE TABLE IF NOT EXISTS cart_items (
@@ -106,7 +132,7 @@ const initializeSchema = async () => {
       share_code TEXT NOT NULL UNIQUE,
       total_amount REAL NOT NULL DEFAULT 0,
       total_quantity INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'pending',
+      status TEXT DEFAULT 'pending',
       remark TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -118,7 +144,8 @@ const initializeSchema = async () => {
       dish_id INTEGER NOT NULL,
       dish_name TEXT NOT NULL,
       price REAL NOT NULL DEFAULT 0,
-      quantity INTEGER NOT NULL DEFAULT 1
+      quantity INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS chat_messages (
@@ -133,8 +160,33 @@ const initializeSchema = async () => {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS ai_chat_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ai_chat_history_user ON ai_chat_history(user_id);
+
     CREATE INDEX IF NOT EXISTS idx_cart_user ON cart_items(user_id);
+    CREATE INDEX IF NOT EXISTS idx_cart_dish ON cart_items(dish_id);
+
+    CREATE INDEX IF NOT EXISTS idx_dishes_category ON dishes(category_id);
+    CREATE INDEX IF NOT EXISTS idx_dishes_name ON dishes(name);
+
+    CREATE INDEX IF NOT EXISTS idx_dish_steps_dish ON dish_steps(dish_id);
+
+    CREATE INDEX IF NOT EXISTS idx_dish_tags_dish ON dish_tags(dish_id);
+    CREATE INDEX IF NOT EXISTS idx_dish_tags_tag ON dish_tags(tag_id);
+
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_share_code ON orders(share_code);
+
+    CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+    CREATE INDEX IF NOT EXISTS idx_order_items_dish ON order_items(dish_id);
+
     CREATE INDEX IF NOT EXISTS idx_chat_conversation_created ON chat_messages(conversation_key, created_at);
     CREATE INDEX IF NOT EXISTS idx_chat_receiver_read ON chat_messages(receiver_id, is_read);
   `);
