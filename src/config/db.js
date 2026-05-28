@@ -168,6 +168,25 @@ const initializeSchema = async () => {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS friend_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_user_id INTEGER NOT NULL,
+      to_user_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      message TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(from_user_id, to_user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS friendships (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      friend_id INTEGER NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, friend_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ai_chat_history_user ON ai_chat_history(user_id);
 
     CREATE INDEX IF NOT EXISTS idx_cart_user ON cart_items(user_id);
@@ -189,7 +208,12 @@ const initializeSchema = async () => {
 
     CREATE INDEX IF NOT EXISTS idx_chat_conversation_created ON chat_messages(conversation_key, created_at);
     CREATE INDEX IF NOT EXISTS idx_chat_receiver_read ON chat_messages(receiver_id, is_read);
-  `);
+  
+    CREATE INDEX IF NOT EXISTS idx_friend_requests_to_user ON friend_requests(to_user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_friend_requests_from_user ON friend_requests(from_user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
+    CREATE INDEX IF NOT EXISTS idx_friendships_friend ON friendships(friend_id);
+    `);
 
   persistDatabase(db);
 };

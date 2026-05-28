@@ -10,6 +10,7 @@ const cartRoutes = require('./routes/cart.routes'); // 引入购物车路由
 const orderRoutes = require('./routes/order.routes'); // 引入订单路由
 const messageRoutes = require('./routes/message.routes'); // 引入聊天消息路由
 const authRoutes = require('./routes/auth.routes'); // 引入登录路由
+const friendRoutes = require('./routes/friend.routes'); // 引入好友路由
 const app = express();
 
 // 中间件
@@ -39,6 +40,9 @@ app.use('/api/orders', orderRoutes);
 
 // 聊天消息路由
 app.use('/api/messages', messageRoutes);
+
+// 好友路由
+app.use('/api/friends', friendRoutes);
 
 // 错误处理中间件 (必须放在所有路由之后)
 app.use(errorHandler);
