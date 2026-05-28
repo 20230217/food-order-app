@@ -30,6 +30,14 @@ const formatMessage = (message) => {
   };
 };
 
+const selectPeer = (message, userId) => {
+  if (!message) return null;
+
+  return Number(message.senderId) === Number(userId)
+    ? message.receiver
+    : message.sender;
+};
+
 const MessageService = {
   sendMessage: async ({ senderId, receiverId, type = 'text', content = '', payload = null }) => {
     const normalizedSenderId = toPositiveInteger(senderId);
@@ -81,6 +89,7 @@ const MessageService = {
       return {
         conversationKey: conversation.conversationKey,
         peerId,
+        peer: selectPeer(formattedMessage, normalizedUserId),
         unreadCount: Number(conversation.unreadCount || 0),
         latestMessage: formattedMessage,
       };

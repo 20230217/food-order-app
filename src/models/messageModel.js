@@ -1,5 +1,56 @@
 const pool = require('../config/db');
 
+const userSelectFields = (alias, prefix) => `
+  ${alias}.id AS ${prefix}Id,
+  ${alias}.username AS ${prefix}Username,
+  ${alias}.nickname AS ${prefix}Nickname,
+  ${alias}.avatar_url AS ${prefix}AvatarUrl,
+  ${alias}.avatar AS ${prefix}Avatar
+`;
+
+const normalizeMessageRow = (row) => {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    conversationKey: row.conversationKey,
+    senderId: row.senderId,
+    receiverId: row.receiverId,
+    type: row.type,
+    content: row.content,
+    payload: row.payload,
+    isRead: row.isRead,
+    createdAt: row.createdAt,
+    unreadCount: row.unreadCount,
+    sender: {
+      id: row.senderUserId || row.senderId,
+      username: row.senderUserUsername,
+      nickname: row.senderUserNickname,
+      avatarUrl: row.senderUserAvatarUrl || row.senderUserAvatar || '',
+    },
+    receiver: {
+      id: row.receiverUserId || row.receiverId,
+      username: row.receiverUserUsername,
+      nickname: row.receiverUserNickname,
+      avatarUrl: row.receiverUserAvatarUrl || row.receiverUserAvatar || '',
+    },
+  };
+};
+
+const messageSelectFields = `
+  cm.id,
+  cm.conversation_key AS conversationKey,
+  cm.sender_id AS senderId,
+  cm.receiver_id AS receiverId,
+  cm.type,
+  cm.content,
+  cm.payload,
+  cm.is_read AS isRead,
+  cm.created_at AS createdAt,
+  ${userSelectFields('sender', 'senderUser')},
+  ${userSelectFields('receiver', 'receiverUser')}
+`;
+
 const ensureChatMessagesTable = async () => {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS chat_messages (
@@ -43,46 +94,32 @@ const MessageModel = {
     await ensureChatMessagesTable();
 
     const [rows] = await pool.query(
-      `SELECT
-         id,
-         conversation_key AS conversationKey,
-         sender_id AS senderId,
-         receiver_id AS receiverId,
-         type,
-         content,
-         payload,
-         is_read AS isRead,
-         created_at AS createdAt
-       FROM chat_messages
-       WHERE id = ?`,
+      `SELECT ${messageSelectFields}
+      FROM chat_messages cm
+      LEFT JOIN users sender ON sender.id = cm.sender_id
+      LEFT JOIN users receiver ON receiver.id = cm.receiver_id
+      WHERE cm.id = ?`,
       [id]
     );
 
-    return rows[0] || null;
+    return normalizeMessageRow(rows[0]);
   },
 
   getConversationMessages: async (conversationKey, limit) => {
     await ensureChatMessagesTable();
 
     const [rows] = await pool.query(
-      `SELECT
-         id,
-         conversation_key AS conversationKey,
-         sender_id AS senderId,
-         receiver_id AS receiverId,
-         type,
-         content,
-         payload,
-         is_read AS isRead,
-         created_at AS createdAt
-       FROM chat_messages
-       WHERE conversation_key = ?
-       ORDER BY created_at ASC, id ASC
-       LIMIT ?`,
+      `SELECT ${messageSelectFields}
+      FROM chat_messages cm
+      LEFT JOIN users sender ON sender.id = cm.sender_id
+      LEFT JOIN users receiver ON receiver.id = cm.receiver_id
+      WHERE cm.conversation_key = ?
+      ORDER BY cm.created_at ASC, cm.id ASC
+      LIMIT ?`,
       [conversationKey, limit]
     );
 
-    return rows;
+    return rows.map(normalizeMessageRow);
   },
 
   markConversationAsRead: async (conversationKey, receiverId) => {
