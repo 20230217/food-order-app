@@ -203,19 +203,20 @@ const FriendModel = {
   getFriends: async (userId) => {
     const [rows] = await pool.query(
       `SELECT
-         u.id,
-         u.username,
-         u.nickname,
-         COALESCE(NULLIF(u.avatar_url, ''), NULLIF(u.avatar, ''), '') AS avatarUrl
-         f.created_at AS friendCreatedAt
-       FROM friendships f
-       JOIN users u ON u.id = f.friend_id
-       WHERE f.user_id = ?
-       ORDER BY f.created_at DESC`,
+        u.id,
+        u.username,
+        u.nickname,
+        u.avatar_url AS avatarUrl,
+        u.avatar,
+        fs.created_at AS friendCreatedAt
+      FROM friendships AS fs
+      JOIN users u ON u.id = fs.friend_id
+      WHERE fs.user_id = ?
+      ORDER BY fs.created_at DESC`,
       [userId]
     );
 
-    return rows;
+    return normalizeUserRows(rows);
   },
 
   deleteFriend: async ({ userId, friendId }) => {
