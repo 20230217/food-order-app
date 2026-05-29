@@ -1,6 +1,6 @@
 const AuthService = require('../services/authService');
 const { successResponse, errorResponse } = require('../utils/response');
-
+const { saveAvatarBase64 } = require('../utils/avatarUpload');
 const AuthController = {
   wechatLogin: async (req, res, next) => {
     try {
