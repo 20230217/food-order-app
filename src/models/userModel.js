@@ -87,7 +87,7 @@ const selectUserFields = `
   password,
   openid,
   nickname,
-  COALESCE(avatar_url, avatar, '') AS avatarUrl,
+  COALESCE(NULLIF(avatar_url, ''), NULLIF(avatar, ''), '') AS avatarUrl,
   created_at AS createdAt,
   updated_at AS updatedAt
 `;

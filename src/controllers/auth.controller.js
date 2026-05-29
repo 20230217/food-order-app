@@ -64,6 +64,26 @@ const AuthController = {
     successResponse(res, 200, 'Profile retrieved successfully', req.user);
   },
 
+  uploadAvatar: async (req, res, next) => {
+    try {
+      const avatarPath = saveAvatarBase64({
+        userId: req.user.id,
+        base64: req.body.base64,
+        mimeType: req.body.mimeType,
+      });
+
+      const origin = `${req.protocol}://${req.get('host')}`;
+      successResponse(res, 200, 'Avatar uploaded successfully', {
+        avatarUrl: `${origin}${avatarPath}`,
+      });
+    } catch (error) {
+      if (error.message === 'avatar data is required' || error.message === 'avatar data is invalid') {
+        return errorResponse(res, 400, error.message);
+      }
+
+      next(error);
+    }
+  },
   updateProfile: async (req, res, next) => {
     try {
       // req.user 来自 auth 中间件，表示当前登录用户

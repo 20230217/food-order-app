@@ -10,6 +10,8 @@ router.post('/wechat-login', AuthController.wechatLogin);
 // 模拟账号登录：备用，用于没有 AppID/AppSecret 时测试
 router.post('/mock-login', AuthController.mockLogin);
 
+router.post('/avatar', auth, AuthController.uploadAvatar);
+
 // 获取当前登录用户，需要 token
 router.get('/profile', auth, AuthController.getProfile);
 
