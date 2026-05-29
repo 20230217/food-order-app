@@ -23,8 +23,8 @@ const ensureUsersTable = async () => {
        openid VARCHAR(128) NULL UNIQUE,
        nickname VARCHAR(64),
        avatar_url TEXT,
+       avatar TEXT,
        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
      )`
   );
 
@@ -64,6 +64,12 @@ const ensureUsersTable = async () => {
 
   await ensureColumn(
     columnNames,
+    'avatar',
+    'ALTER TABLE users ADD COLUMN avatar TEXT AFTER avatar_url'
+  );
+
+  await ensureColumn(
+    columnNames,
     'created_at',
     'ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
   );
@@ -81,7 +87,7 @@ const selectUserFields = `
   password,
   openid,
   nickname,
-  avatar_url AS avatarUrl,
+  COALESCE(avatar_url, avatar, '') AS avatarUrl,
   created_at AS createdAt,
   updated_at AS updatedAt
 `;
@@ -119,8 +125,8 @@ const UserModel = {
     // 微信登录时 username/password 可以为空；
     // 账号密码登录时 username/password 有值。
     const [result] = await pool.query(
-      `INSERT INTO users (username, password, openid, nickname, avatar_url)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO users (username, password, openid, nickname, avatar_url, avatar)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         username || null,
         password || null,
@@ -138,9 +144,9 @@ const UserModel = {
 
     const [result] = await pool.query(
       `UPDATE users
-       SET nickname = ?, avatar_url = ?
+       SET nickname = ?, avatar_url = ?, avatar = ?
        WHERE id = ?`,
-      [nickname || null, avatarUrl || null, id]
+      [nickname || null, avatarUrl || null, avatarUrl || null, id]
     );
 
     return result;

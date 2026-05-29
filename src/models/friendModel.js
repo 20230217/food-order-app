@@ -4,7 +4,7 @@ const userFields = `
   id,
   username,
   nickname,
-  avatar_url AS avatarUrl,
+  COALESCE(avatar_url, avatar, '') AS avatarUrl,
   openid
 `;
 
@@ -109,7 +109,7 @@ const FriendModel = {
          fr.created_at AS createdAt,
          u.username,
          u.nickname,
-         u.avatar_url AS avatarUrl
+         COALESCE(u.avatar_url, u.avatar, '') AS avatarUrl
        FROM friend_requests fr
        JOIN users u ON u.id = fr.from_user_id
        WHERE fr.to_user_id = ? AND fr.status = 'pending'
@@ -131,7 +131,7 @@ const FriendModel = {
          fr.created_at AS createdAt,
          u.username,
          u.nickname,
-         u.avatar_url AS avatarUrl
+         COALESCE(u.avatar_url, u.avatar, '') AS avatarUrl
        FROM friend_requests fr
        JOIN users u ON u.id = fr.to_user_id
        WHERE fr.from_user_id = ?
@@ -206,7 +206,7 @@ const FriendModel = {
          u.id,
          u.username,
          u.nickname,
-         u.avatar_url AS avatarUrl,
+         COALESCE(u.avatar_url, u.avatar, '') AS avatarUrl,
          f.created_at AS friendCreatedAt
        FROM friendships f
        JOIN users u ON u.id = f.friend_id
