@@ -4,9 +4,23 @@ const userFields = `
   id,
   username,
   nickname,
-  COALESCE(NULLIF(u.avatar_url, ''), NULLIF(u.avatar, ''), '') AS avatarUrl
+  avatar_url AS avatarUrl,
+  avatar,
   openid
 `;
+
+const normalizeAvatarUrl = (row = {}) => row.avatarUrl || row.avatar_url || row.avatar || '';
+
+const normalizeUserRow = (row) => {
+  if (!row) return row;
+
+  return {
+    ...row,
+    avatarUrl: normalizeAvatarUrl(row),
+  };
+};
+
+const normalizeUserRows = (rows = []) => rows.map(normalizeUserRow);
 
 const normalizeId = (value) => {
   const numberValue = Number(value);
