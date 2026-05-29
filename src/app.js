@@ -1,6 +1,7 @@
 // d:\Uniapp\food-order-app\server\src\app.js
 
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const logger = require('./middleware/logger');
 const errorHandler = require('./middleware/errorHandler');
