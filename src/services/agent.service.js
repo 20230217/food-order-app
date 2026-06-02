@@ -602,9 +602,17 @@ ${formatCartReply(cartItems)}`,
         ],
       };
     } catch (error) {
-      console.error('Error in AgentService.chatWithAgent:', error);
-      throw new Error('Failed to chat with agent');
-    }
+        console.error('Error in AgentService.chatWithAgent:', error);
+
+        return {
+          reply: '抱歉，AI 助手刚才处理失败了，但后端接口已连接。请稍后再试，或换一种说法提问。',
+          toolCalls: [
+            buildToolCall('agent_error_fallback', {
+              message: error.message,
+            }),
+          ],
+        };
+      }
   },
 };
 

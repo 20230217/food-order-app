@@ -17,7 +17,6 @@ const app = express();
 app.set('trust proxy', true);
 // 中间件
 app.use(cors()); // 启用 CORS
-app.use(express.json()); // 解析 JSON 格式的请求体
 app.use(logger); // 请求日志
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
